@@ -70,11 +70,12 @@ def main():
             if not page_token:
                 break
         
+        send_data = {}
+        send_data['blocks'] = []
         for evt, eid in toSlackBot:
             event = service.events().get(calendarId=calendar_id, eventId=eid).execute()
-            #print(event['summary'],event['start'],event['end'] )
             s,e = '',''
-            date=[0,0] # pretty date
+            date=[0,0]
             allday = False
 
             if 'dateTime' in event['start']:
@@ -91,53 +92,24 @@ def main():
                 tmp=datetime.datetime.strptime(e,'%Y-%m-%d') - datetime.timedelta(days=1)
                 date[1] = str(time.mktime(tmp.timetuple()))[:-2]
                 allday=True
-
+            
             title = ''
             if evt == 'created':
-                title = ':white_check_mark: [New Event] ' + event['summary']
+                title = 'New Event created' 
             elif evt == 'updated':
-                title= ':white_check_mark: [Updated] ' + event['summary'] 
+                title= 'Event updated ' 
             else: #cancelled
-                title = ':white_check_mark: [Cancelled] ' + event['summary']
-
-            send_data = {}
-            send_data['blocks'] = []
-            send_data['blocks'].append( {
-                "type":"section",
-                "text":{
-                    "type":"mrkdwn",
-                    "text":f"*{title}*"
-                }
-            })
+                title = 'Event cancelled ' 
+            
             if allday:
                 if date[0]== date[1]:
                     tmp_date = str(datetime.datetime.strptime(s,'%Y-%m-%d'))[:-9]
-                    send_data['blocks'].append( 
-                    { 
-                        "type":"section", 
-                        "text":
-                            {
-                                "type":"mrkdwn",
-                                "text":f'<!date^{date[0]}'+'^ {date_long_pretty} | '+f'{tmp_date} (All day)>'
-                            }
-                        
-                        }
-                    )
+                    timestr = f'><!date^{date[0]}'+'^ {date_long_pretty} | '+f'{tmp_date} (All day)>'
                 else:
                     tmp_date_s= str(datetime.datetime.strptime(s,'%Y-%m-%d'))[:-9]
                     tmp_date_e= str(datetime.datetime.strptime(e,'%Y-%m-%d')-datetime.timedelta(days=1))[:-9]
-                    send_data['blocks'].append( 
-                    { 
-                        "type":"section", 
-                        "text":
-                            {
-                                "type":"mrkdwn",
-                                "text":f'from <!date^{date[0]}'+'^ {date_long_pretty} |'+f'{tmp_date_s}> to'+ \
+                    timestr = f'>from <!date^{date[0]}'+'^ {date_long_pretty} |'+f'{tmp_date_s}> to'+ \
                                     f'<!date^{date[1]}'+'^ {date_long_pretty} | '+f'{tmp_date_e}> '
-                            }
-                        
-                        }
-                    )
             else:
                 tmp_date_s=str(datetime.datetime.strptime(s,'%Y-%m-%dT%H:%M:%S'))[:-3]
                 tmp_date_e=''
@@ -148,22 +120,25 @@ def main():
                 else:
                     tmp_date_e=str(datetime.datetime.strptime(e,'%Y-%m-%dT%H:%M:%S'))[:-3]
                 
-                send_data['blocks'].append( 
-                { 
-                    "type":"section", 
-                    "text":
-                        {
-                            "type":"mrkdwn",
-                            "text":f'from <!date^{date[0]}'+'^ {date_long_pretty} {time}|'+f'{tmp_date_s}> to'+ \
+                timestr = f'>from <!date^{date[0]}'+'^ {date_long_pretty} {time}|'+f'{tmp_date_s}> to'+ \
                                 f'<!date^{date[1]}'+'^ {date_long_pretty} {time}|'+f'{tmp_date_e}> '
-                        }
-                    
+                
+            #print(send_data)
+            send_data['blocks'].append( 
+                    { 
+                        "type":"section", 
+                        "text":
+                            {
+                                "type": "mrkdwn",
+                                "text": f"{title}\n>*{event['summary']}*\n" + timestr
+                            }
                     }
                 )
-            response=requests.post(SLACKBOT_RESTAPI, json=send_data)
-            
-            if response.status_code == 400:
-                print(response.content)
+        response=requests.post(SLACKBOT_RESTAPI,json=send_data)
+        #print(response.content)
+        
+        if response.status_code == 400:
+            print(response.content)
                 
     except HttpError as error:
         print('An error occurred: %s' % error)
